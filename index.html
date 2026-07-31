@@ -216,6 +216,28 @@ body.pen-mode .tap-nav{display:none}
 .tap-set:active{transform:translateX(-50%) scale(.95)}
 body.recording-turns .tap-set{display:flex}
 body.recording-turns.focus-mode .tap-set{display:flex}
+/* 집중모드에서 컨트롤이 뜨면 '여기서 넘김'을 위로 올려 겹침 방지 */
+body.focus-mode.recording-turns .tap-set{bottom:84px}
+
+/* 집중 모드 플로팅 재생 컨트롤 (확대 상태에서도 조작 가능) */
+.focus-ctrl{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  display:none;align-items:center;gap:14px;z-index:7;
+  background:rgba(22,24,29,.82);backdrop-filter:blur(8px);
+  padding:8px 12px;border-radius:34px;border:1px solid var(--line);
+  box-shadow:0 6px 22px rgba(0,0,0,.45);
+}
+body.focus-mode .focus-ctrl{display:flex}
+body.focus-mode.pen-mode .focus-ctrl{display:none}
+.fc-btn{
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--panel-2);color:var(--text);font-size:20px;
+  border:1px solid var(--line);transition:transform .1s;
+}
+.fc-btn:active{transform:scale(.9)}
+.fc-play{width:60px;height:60px;background:var(--accent);color:#1A1408;font-size:26px;border-color:var(--accent)}
+.fc-play.on{background:var(--accent-deep)}
 
 /* 타이밍 편집 리스트 */
 .timing-list{max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
@@ -235,6 +257,35 @@ body.recording-turns.focus-mode .tap-set{display:flex}
 .timing-row .unit{font-size:12px;color:var(--muted);flex-shrink:0}
 .timing-row.edited input{border-color:var(--accent);color:var(--accent)}
 .timing-row .mmss{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+/* 고급: 페이지별 마디 수 */
+.adv-box{border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden;background:var(--ink)}
+.adv-head{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  padding:13px 14px;font-size:13.5px;font-weight:700;color:var(--text);text-align:left;
+}
+.adv-caret{color:var(--muted);transition:transform .2s}
+.adv-box.open .adv-caret{transform:rotate(180deg)}
+.adv-body{display:none;padding:0 14px 14px}
+.adv-box.open .adv-body{display:block}
+.measure-list{display:flex;flex-direction:column;gap:7px;max-height:34vh;overflow-y:auto}
+.measure-row{
+  display:flex;align-items:center;gap:11px;padding:8px 11px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+}
+.measure-row .pg{font-size:13px;color:var(--text);flex-shrink:0;min-width:52px}
+.measure-row .pg b{color:var(--accent)}
+.measure-row input{
+  width:70px;padding:8px 9px;border-radius:9px;border:1px solid var(--line);
+  background:var(--ink);color:var(--text);font-size:14px;text-align:center;
+  font-variant-numeric:tabular-nums;outline:none;
+}
+.measure-row input:focus{border-color:var(--accent)}
+.measure-row .unit{font-size:12px;color:var(--muted);flex-shrink:0}
+.measure-row .startat{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0;font-variant-numeric:tabular-nums}
+.adv-sum{font-size:12px;color:var(--accent);margin-top:10px;text-align:center;font-weight:600}
+.timing-sec-label{font-size:12.5px;color:var(--muted);margin:2px 0 9px;font-weight:600}
+.timing-sec-label span{font-weight:400;opacity:.8}
 
 /* 하단 플레이 바 */
 .playbar{
@@ -382,6 +433,7 @@ body.recording-turns.focus-mode .tap-set{display:flex}
 <div class="screen" id="viewer">
   <div class="v-top">
     <button class="icon-btn" id="backBtn" aria-label="보관함으로">←</button>
+    <button class="icon-btn" id="restartBtn" aria-label="처음으로">⏮</button>
     <button class="icon-btn" id="playBtn" aria-label="재생">▶</button>
     <div class="v-title">
       <span id="vTitle">곡 제목</span>
@@ -413,6 +465,10 @@ body.recording-turns.focus-mode .tap-set{display:flex}
     <div class="tap-nav right" id="tapNext"></div>
     <div class="focus-hint" id="focusHint">가운데를 탭하면 메뉴가 다시 나타나요</div>
     <button class="tap-set" id="tapSetBtn">여기서 넘김 ⏱</button>
+    <div class="focus-ctrl" id="focusCtrl">
+      <button class="fc-btn" id="fcRestart" aria-label="처음으로">⏮</button>
+      <button class="fc-btn fc-play" id="fcPlay" aria-label="재생">▶</button>
+    </div>
   </div>
 
   <div class="playbar">
@@ -432,13 +488,36 @@ body.recording-turns.focus-mode .tap-set{display:flex}
   <div class="modal">
     <h2>넘김 타이밍 조정</h2>
     <div class="sub">
-      각 페이지로 <b>넘어가는 시각</b>을 직접 맞출 수 있어요. 페이지마다 마디 수가 달라서
-      자동 계산이 안 맞을 때 조정하세요.<br>
-      💡 <b>가장 쉬운 방법</b>: 뷰어에서 곡을 재생하며 넘길 때가 되면 화면 아래 <b>"여기서 넘김"</b> 버튼을 누르면 그 시점이 자동 기록돼요.
+      각 페이지로 <b>넘어가는 시각</b>을 맞출 수 있어요. 아래 방법 중 편한 걸 쓰면 돼요.
     </div>
+
+    <!-- 고급: 페이지별 마디 수 -->
+    <div class="adv-box">
+      <button class="adv-head" id="advToggle">
+        <span>🎯 고급 · 페이지별 마디 수로 정확히 계산</span>
+        <span class="adv-caret" id="advCaret">▾</span>
+      </button>
+      <div class="adv-body" id="advBody">
+        <div class="hint" style="margin:0 0 10px">
+          각 페이지에 <b>몇 마디</b>가 들어있는지 입력하면, 현재 BPM(<span id="advBpm">120</span>)과
+          박자(<span id="advSig">4/4</span>)로 넘김 시각을 정확히 계산해요.
+          모든 페이지를 채우면 자동으로 적용돼요. (한 칸이라도 비면 균등 분배로 계산)
+        </div>
+        <div class="measure-list" id="measureList"></div>
+        <div class="adv-sum" id="advSum"></div>
+        <button class="btn ghost" id="measureApplyDur" style="width:100%;margin-top:8px;font-size:13px">
+          이 마디 수 기준으로 곡 길이도 맞추기
+        </button>
+      </div>
+    </div>
+
+    <div class="timing-sec-label">페이지별 넘김 시각 <span>(직접 편집 가능)</span></div>
     <div class="timing-list" id="timingList"></div>
+    <div class="hint" style="margin-top:2px">
+      💡 재생하며 <b>"여기서 넘김"</b> 버튼을 눌러도 그 시점이 기록돼요. 마디 수를 입력하면 이 값들이 자동으로 채워져요.
+    </div>
     <div class="modal-actions">
-      <button class="btn ghost" id="timingReset">자동값으로 초기화</button>
+      <button class="btn ghost" id="timingReset">전체 초기화</button>
       <button class="btn primary" id="timingClose">완료</button>
     </div>
   </div>
@@ -726,8 +805,26 @@ function fileToDataURL(file){
    turnTimes[k] = 페이지 (k+1)이 오른쪽 현재 페이지가 되는 시각(초).
    길이 = N-1. 첫 페이지(0)는 0초부터 오른쪽.
 
-   기본값은 곡 길이를 페이지에 균등 분배. song.customTurns[k]에
-   사용자가 지정한 값이 있으면 그걸 우선(페이지별 미세조정). */
+   넘김 시각 계산 우선순위(높은 것이 우선):
+   1. song.customTurns[k]  — '여기서 넘김'/직접 편집으로 지정한 정확한 시각
+   2. song.measures[]      — 페이지별 마디 수. BPM·박자로 정확히 계산
+   3. 균등 분배            — 곡 길이 ÷ 페이지 수 */
+
+/* 페이지별 마디 수로 각 페이지 시작 시각 계산.
+   한 마디 길이 = (박자/BPM)*60초. 페이지 k 시작 = 앞 페이지 마디수 누적 * 마디길이. */
+function measureTurnTimes(song){
+  const N=song.pages.length;
+  const m=song.measures;
+  if(!m || m.length!==N) return null;
+  if(m.some(v=>!(v>0))) return null;        // 하나라도 비었으면 사용 안 함
+  const measureDur = (song.sig/song.bpm)*60; // 한 마디 길이(초)
+  const times=[]; let acc=0;
+  for(let k=0;k<N-1;k++){
+    acc += m[k];                             // 페이지 k까지의 누적 마디 수
+    times.push(+(acc*measureDur).toFixed(2));
+  }
+  return times;
+}
 function baseTurnTimes(song){
   const N=song.pages.length;
   const times=[];
@@ -736,12 +833,13 @@ function baseTurnTimes(song){
   return times;
 }
 function computeTurnTimes(song){
-  const base=baseTurnTimes(song);
+  const measured = measureTurnTimes(song);   // 마디 수 기반(없으면 null)
+  const base = measured || baseTurnTimes(song);
   const custom=song.customTurns||{};
   const times=base.map((t,k)=> (custom[k]!=null? +custom[k] : t));
   for(let k=0;k<times.length;k++){
-    times[k]=Math.max(0.1, Math.min(times[k], song.duration-0.1));
-    if(k>0 && times[k]<=times[k-1]) times[k]=Math.min(times[k-1]+0.3, song.duration-0.1);
+    times[k]=Math.max(0.1, times[k]);
+    if(k>0 && times[k]<=times[k-1]) times[k]=times[k-1]+0.3;
   }
   return times;
 }
@@ -767,6 +865,7 @@ function openSong(song){
   updateSub();
   $("totTime").textContent=fmt(song.duration);
   $("playBtn").textContent="▶"; $("playBtn").classList.remove("on");
+  $("fcPlay").textContent="▶"; $("fcPlay").classList.remove("on");
   $("beatDot").classList.remove("live");
   document.documentElement.style.setProperty("--beat-dur",(60/song.bpm)+"s");
   setPen(false);
@@ -913,11 +1012,29 @@ document.addEventListener("keydown", e=>{
 
 /* ── 재생 (곡 길이·BPM 기반 자동 넘김) ── */
 $("playBtn").addEventListener("click", togglePlay);
+$("fcPlay").addEventListener("click", (e)=>{ e.stopPropagation(); togglePlay(); });
+$("restartBtn").addEventListener("click", restartSong);
+$("fcRestart").addEventListener("click", (e)=>{ e.stopPropagation(); restartSong(); });
 function togglePlay(){ if(S.playing) stopPlay(); else startPlay(); }
+/* 상단·집중모드 두 플레이 버튼의 표시 상태를 한 곳에서 동기화 */
+function reflectPlayUI(){
+  const label = S.playing ? "⏸" : "▶";
+  $("playBtn").textContent=label; $("playBtn").classList.toggle("on",S.playing);
+  $("fcPlay").textContent=label;  $("fcPlay").classList.toggle("on",S.playing);
+}
+/* 처음으로: 재생 위치를 0으로 되돌리고 첫 페이지로 (재생 중이면 계속 재생) */
+function restartSong(){
+  S.elapsed=0; S.rightIdx=0;
+  S.lastTs=performance.now();
+  flushNotes();
+  renderSpread(false);
+  updatePlaybar();
+  toast("처음으로 ⏮");
+}
 function startPlay(){
   if(S.elapsed>=S.cur.duration){ S.elapsed=0; S.rightIdx=0; renderSpread(false); }
   S.playing=true; S.lastTs=performance.now();
-  $("playBtn").textContent="⏸"; $("playBtn").classList.add("on");
+  reflectPlayUI();
   $("beatDot").classList.add("live");
   document.body.classList.add("recording-turns");  // '여기서 넘김' 버튼 표시
   if(METRO.followPlay && !METRO.on){ METRO.setBpm(S.cur.bpm); METRO.setBeats(S.cur.sig); METRO.start(); }
@@ -926,7 +1043,7 @@ function startPlay(){
 function stopPlay(){
   S.playing=false;
   if(S.raf){ cancelAnimationFrame(S.raf); S.raf=null; }
-  $("playBtn").textContent="▶"; $("playBtn").classList.remove("on");
+  reflectPlayUI();
   $("beatDot").classList.remove("live");
   document.body.classList.remove("recording-turns");
   if(METRO.followPlay && METRO.on) METRO.stop();
@@ -1021,14 +1138,94 @@ $("tapSetBtn").addEventListener("click", (e)=>{
 
 /* 타이밍 편집 모달 */
 $("timingBtn").addEventListener("click", openTimingModal);
+$("advToggle").addEventListener("click", ()=>{
+  $("advBody").parentElement.classList.toggle("open");
+});
 function openTimingModal(){
   const N=S.cur.pages.length;
+  // 상단 안내에 현재 BPM/박자 표시
+  $("advBpm").textContent=S.cur.bpm;
+  $("advSig").textContent={4:"4/4",3:"3/4",6:"6/8",2:"2/4"}[S.cur.sig]||S.cur.sig;
+  renderMeasureList();
+  renderTimingList();
+  $("timingModal").classList.add("open");
+}
+
+/* 고급: 페이지별 마디 수 입력 리스트 */
+function renderMeasureList(){
+  const N=S.cur.pages.length;
+  if(!S.cur.measures || S.cur.measures.length!==N){
+    // 기존 값 유지하며 길이 맞춤
+    const old=S.cur.measures||[];
+    S.cur.measures=Array.from({length:N},(_,i)=> old[i]!=null?old[i]:null);
+  }
+  const list=$("measureList"); list.innerHTML="";
+  for(let i=0;i<N;i++){
+    const row=document.createElement("div");
+    row.className="measure-row";
+    const val=S.cur.measures[i];
+    row.innerHTML=`
+      <span class="pg"><b>${i+1}p</b></span>
+      <input type="number" min="1" step="1" inputmode="numeric" data-i="${i}" placeholder="—" value="${val!=null?val:""}">
+      <span class="unit">마디</span>
+      <span class="startat" data-start="${i}"></span>`;
+    const inp=row.querySelector("input");
+    inp.addEventListener("input", ()=>{
+      const v=parseInt(inp.value,10);
+      S.cur.measures[i] = (v>0)? v : null;
+      applyMeasures();
+    });
+    list.appendChild(row);
+  }
+  updateMeasureStarts();
+}
+
+/* 마디 수 입력이 바뀔 때: 넘김 시각 재계산 + 화면 반영 */
+function applyMeasures(){
+  // 마디 수를 새로 지정하면, 그 페이지의 수동(customTurns) 값은 해제해서 마디 계산이 반영되게
+  const N=S.cur.pages.length;
+  const complete = S.cur.measures && S.cur.measures.length===N && S.cur.measures.every(v=>v>0);
+  if(complete){
+    // 마디 수가 모두 채워지면 수동 지정값을 비워 마디 계산이 우선되도록
+    S.cur.customTurns={};
+  }
+  S.turnTimes=computeTurnTimes(S.cur);
+  renderTicks(); applyElapsed(); updateMeasureStarts(); renderTimingList(); scheduleSaveSong();
+  const sum=$("advSum");
+  if(complete){
+    const measureDur=(S.cur.sig/S.cur.bpm)*60;
+    const totalMeasures=S.cur.measures.reduce((a,b)=>a+b,0);
+    const totalSec=totalMeasures*measureDur;
+    sum.textContent=`총 ${totalMeasures}마디 · 계산상 ${fmt(totalSec)} → 마디 기반으로 정확히 넘어가요 ✓`;
+  }else{
+    const filled=(S.cur.measures||[]).filter(v=>v>0).length;
+    sum.textContent = filled>0 ? `${filled}/${N} 페이지 입력됨 — 모두 채우면 자동 적용돼요` : "";
+  }
+}
+
+/* 각 페이지가 시작되는 시각을 마디 행 오른쪽에 표시 */
+function updateMeasureStarts(){
+  const N=S.cur.pages.length;
+  const times=computeTurnTimes(S.cur);  // 길이 N-1 (페이지1~ 시작시각)
+  for(let i=0;i<N;i++){
+    const el=document.querySelector(`.startat[data-start="${i}"]`);
+    if(!el) continue;
+    const start = i===0 ? 0 : times[i-1];
+    el.textContent = `${fmt(start)}~`;
+  }
+}
+
+/* 페이지별 넘김 시각(직접 편집) 리스트 */
+function renderTimingList(){
+  const N=S.cur.pages.length;
   const list=$("timingList"); list.innerHTML="";
-  if(N<2){ list.innerHTML=`<div class="sub">페이지가 1장이라 넘김이 없어요.</div>`; }
+  if(N<2){ list.innerHTML=`<div class="hint">페이지가 1장이라 넘김이 없어요.</div>`; return; }
   const times=computeTurnTimes(S.cur);
+  const measuresComplete = S.cur.measures && S.cur.measures.length===N && S.cur.measures.every(v=>v>0);
   for(let k=0;k<N-1;k++){
     const row=document.createElement("div");
-    row.className="timing-row"+(S.cur.customTurns[k]!=null?" edited":"");
+    const isCustom = S.cur.customTurns[k]!=null;
+    row.className="timing-row"+(isCustom?" edited":"");
     const secs=times[k];
     row.innerHTML=`
       <span class="pg"><b>${k+1}p</b> <span class="arrow">→</span> <b>${k+2}p</b></span>
@@ -1038,28 +1235,44 @@ function openTimingModal(){
     const inp=row.querySelector("input");
     inp.addEventListener("change", ()=>{
       const v=parseFloat(inp.value);
-      if(isNaN(v)){ return; }
+      if(isNaN(v)) return;
       S.cur.customTurns[k]=+v.toFixed(2);
       S.turnTimes=computeTurnTimes(S.cur);
       row.classList.add("edited");
       row.querySelector(".mmss").textContent=fmt(v);
-      renderTicks(); applyElapsed(); scheduleSaveSong();
+      renderTicks(); applyElapsed(); updateMeasureStarts(); scheduleSaveSong();
     });
     list.appendChild(row);
   }
-  $("timingModal").classList.add("open");
 }
+
+/* 마디 수 합계로 곡 길이 자동 설정 */
+$("measureApplyDur").addEventListener("click", async ()=>{
+  const N=S.cur.pages.length;
+  const complete = S.cur.measures && S.cur.measures.length===N && S.cur.measures.every(v=>v>0);
+  if(!complete){ toast("먼저 모든 페이지의 마디 수를 채워 주세요"); return; }
+  const measureDur=(S.cur.sig/S.cur.bpm)*60;
+  const totalSec=Math.round(S.cur.measures.reduce((a,b)=>a+b,0)*measureDur);
+  S.cur.duration=totalSec;
+  S.turnTimes=computeTurnTimes(S.cur);
+  updateSub(); renderTicks(); applyElapsed(); updateMeasureStarts();
+  $("totTime").textContent=fmt(totalSec);
+  await store.put(S.cur);
+  toast(`곡 길이를 ${fmt(totalSec)}로 맞췄어요`);
+});
+
 $("timingClose").addEventListener("click", ()=>{
   $("timingModal").classList.remove("open");
   flushSaveSong();
 });
 $("timingReset").addEventListener("click", ()=>{
-  if(!confirm("이 곡의 넘김 시점을 자동 계산값으로 되돌릴까요?")) return;
+  if(!confirm("이 곡의 마디 수와 넘김 시점을 모두 초기화할까요?")) return;
   S.cur.customTurns={};
+  S.cur.measures=null;
   S.turnTimes=computeTurnTimes(S.cur);
   renderTicks(); applyElapsed(); scheduleSaveSong();
   openTimingModal();
-  toast("자동값으로 초기화했어요");
+  toast("초기화했어요");
 });
 
 /* 곡 메타(customTurns 등) 저장 디바운스 */
