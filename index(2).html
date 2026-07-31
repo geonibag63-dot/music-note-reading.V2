@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#16181D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ScoreFlow">
+<title>ScoreFlow — 자동 악보 넘김</title>
+<style>
+:root{
+  --ink:#16181D;
+  --panel:#22252C;
+  --panel-2:#2B2F38;
+  --paper:#FBF9F4;
+  --accent:#E5A33B;
+  --accent-deep:#C8862A;
+  --text:#EAE7E0;
+  --muted:#8B8E96;
+  --line:#3A3E48;
+  --danger:#D95C4A;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--ink);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  overflow:hidden;
+  overscroll-behavior:none;
+}
+button{font-family:inherit;border:none;background:none;color:inherit;cursor:pointer}
+input,select{font-family:inherit}
+
+/* ---------- 공통 ---------- */
+.screen{position:fixed;inset:0;display:none;flex-direction:column}
+.screen.active{display:flex}
+.icon-btn{
+  width:44px;height:44px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--panel);font-size:19px;color:var(--text);
+  border:1px solid var(--line);
+  transition:background .15s, transform .1s;
+  flex-shrink:0;
+}
+.icon-btn:active{transform:scale(.94)}
+.icon-btn.on{background:var(--accent);border-color:var(--accent);color:#1A1408}
+
+/* ---------- 보관함 ---------- */
+.lib-head{
+  padding:calc(env(safe-area-inset-top, 0px) + 20px) 22px 14px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+}
+.brand{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-size:27px;letter-spacing:.5px}
+.brand em{color:var(--accent);font-style:italic}
+.brand-sub{font-size:12px;color:var(--muted);margin-top:3px;letter-spacing:.4px}
+.lib-body{flex:1;overflow-y:auto;padding:6px 22px calc(env(safe-area-inset-bottom,0px) + 96px)}
+.song-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
+.song-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;text-align:left;display:flex;flex-direction:column;
+  transition:transform .12s;
+}
+.song-card:active{transform:scale(.97)}
+.song-thumb{
+  aspect-ratio:3/4;background:var(--paper);position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+}
+.song-thumb img{width:100%;height:100%;object-fit:cover;object-position:top}
+.song-thumb .ph{font-size:34px;opacity:.25;color:#333}
+.song-meta{padding:11px 13px 13px}
+.song-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.song-info{font-size:12px;color:var(--muted);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.song-info .bpm{color:var(--accent)}
+.song-del{
+  position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:9px;
+  background:rgba(22,24,29,.72);color:#fff;font-size:14px;
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);
+}
+.empty{margin-top:12vh;text-align:center;color:var(--muted);line-height:1.8;font-size:15px}
+.empty .big{font-size:44px;margin-bottom:12px;opacity:.5}
+.fab{
+  position:fixed;right:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+  width:60px;height:60px;border-radius:50%;
+  background:var(--accent);color:#1A1408;font-size:30px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(229,163,59,.35);
+  transition:transform .12s;z-index:5;
+}
+.fab:active{transform:scale(.92)}
+.install-hint{
+  margin-top:28px;padding:14px 16px;border:1px dashed var(--line);border-radius:12px;
+  font-size:12.5px;color:var(--muted);line-height:1.7;
+}
+.install-hint b{color:var(--text)}
+
+/* ---------- 모달 ---------- */
+.modal-back{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:50;padding:20px;
+}
+.modal-back.open{display:flex}
+.modal{
+  width:min(440px,100%);max-height:88vh;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;
+  padding:24px;
+}
+.modal h2{font-size:19px;margin-bottom:6px}
+.modal .sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;letter-spacing:.3px}
+.field input,.field select{
+  width:100%;padding:12px 13px;border-radius:11px;border:1px solid var(--line);
+  background:var(--ink);color:var(--text);font-size:15px;outline:none;
+}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field-row{display:flex;gap:11px}
+.field-row .field{flex:1}
+.file-pick{
+  width:100%;padding:15px;border-radius:11px;border:1px dashed var(--line);
+  background:var(--ink);color:var(--muted);font-size:14px;text-align:center;
+}
+.file-pick.has{border-color:var(--accent);color:var(--accent)}
+.modal-actions{display:flex;gap:11px;margin-top:22px}
+.btn{flex:1;padding:14px;border-radius:12px;font-size:15px;font-weight:700;transition:transform .1s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);color:#1A1408}
+.btn.ghost{background:var(--panel-2);color:var(--text)}
+.hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.6}
+.hint b{color:var(--text)}
+
+/* ---------- 뷰어 ---------- */
+#viewer{background:#101216}
+.v-top{
+  display:flex;align-items:center;gap:8px;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;
+  z-index:10;
+}
+.v-title{
+  flex:1;min-width:0;text-align:center;font-size:15px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.v-title small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px}
+
+/* 필기 도구 바 */
+.pen-bar{
+  display:none;align-items:center;gap:12px;
+  margin:0 12px 6px;padding:10px 14px;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  overflow-x:auto;
+}
+.pen-bar.open{display:flex}
+.swatches{display:flex;gap:9px;flex-shrink:0}
+.swatch{width:30px;height:30px;border-radius:50%;border:2.5px solid transparent;flex-shrink:0;transition:transform .1s}
+.swatch.sel{border-color:#fff;transform:scale(1.12)}
+.pen-sep{width:1px;height:26px;background:var(--line);flex-shrink:0}
+.size-wrap{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.size-wrap label{font-size:12px;color:var(--muted)}
+.size-wrap input[type=range]{width:110px;accent-color:var(--accent)}
+.size-dot{width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.size-dot i{display:block;border-radius:50%;background:var(--text)}
+.tool-btn{padding:8px 13px;border-radius:10px;background:var(--panel-2);font-size:13px;flex-shrink:0;border:1px solid transparent}
+.tool-btn.sel{background:var(--accent);color:#1A1408}
+
+/* 악보 영역 */
+.spread-wrap{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:2px 3px}
+.spread{display:flex;gap:4px;align-items:center;justify-content:center}
+.page-slot{
+  flex:none;position:relative;background:var(--paper);border-radius:4px;
+  overflow:hidden;box-shadow:0 3px 14px rgba(0,0,0,.4);
+  transition:box-shadow .25s;
+}
+.page-slot.blank{background:#1B1E24;box-shadow:none;border:1px dashed var(--line)}
+/* 오른쪽 = 현재 연주 페이지: 액센트 테두리로 강조. 왼쪽(지난 페이지)은 살짝 흐리게 */
+.page-slot.current{box-shadow:0 0 0 2px var(--accent), 0 5px 20px rgba(0,0,0,.5)}
+.spread .page-slot:first-child:not(.current):not(.blank) .sheet{opacity:.82}
+.page-slot img.sheet{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.page-slot canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.page-num{
+  position:absolute;bottom:4px;right:7px;font-size:10px;color:#999;
+  background:rgba(255,255,255,.7);padding:1px 6px;border-radius:7px;z-index:3;pointer-events:none;
+}
+.page-slot.current .page-num{background:var(--accent);color:#1A1408;font-weight:700}
+/* 집중 모드: 상하단 바 숨기고 악보만 */
+body.focus-mode .v-top,
+body.focus-mode .pen-bar,
+body.focus-mode .playbar{display:none}
+.focus-hint{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  background:rgba(22,24,29,.75);color:var(--muted);font-size:11px;
+  padding:5px 12px;border-radius:20px;z-index:5;pointer-events:none;
+  opacity:0;transition:opacity .3s;backdrop-filter:blur(4px);
+}
+.focus-hint.show{opacity:1}
+@keyframes slideFromRight{from{transform:translateX(45%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes shiftLeft{from{transform:translateX(60%)}to{transform:translateX(0)}}
+.anim-shift{animation:shiftLeft .38s cubic-bezier(.25,.8,.3,1)}
+.anim-in{animation:slideFromRight .42s cubic-bezier(.25,.8,.3,1)}
+@media (prefers-reduced-motion:reduce){.anim-shift,.anim-in{animation:none}}
+
+.tap-nav{position:absolute;top:0;bottom:0;width:16%;z-index:4;opacity:0}
+.tap-nav.left{left:0}
+.tap-nav.right{right:0}
+body.pen-mode .tap-nav{display:none}
+
+/* '여기서 넘김' 기록 버튼 (재생 중에만 표시) */
+.tap-set{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  display:none;align-items:center;gap:6px;
+  background:var(--accent);color:#1A1408;font-size:14px;font-weight:700;
+  padding:11px 20px;border-radius:24px;z-index:6;
+  box-shadow:0 6px 20px rgba(229,163,59,.4);
+}
+.tap-set:active{transform:translateX(-50%) scale(.95)}
+body.recording-turns .tap-set{display:flex}
+body.recording-turns.focus-mode .tap-set{display:flex}
+
+/* 타이밍 편집 리스트 */
+.timing-list{max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.timing-row{
+  display:flex;align-items:center;gap:11px;padding:10px 12px;
+  background:var(--ink);border:1px solid var(--line);border-radius:11px;
+}
+.timing-row .pg{font-size:13px;color:var(--text);flex-shrink:0;min-width:74px}
+.timing-row .pg b{color:var(--accent)}
+.timing-row .arrow{color:var(--muted);font-size:12px;flex-shrink:0}
+.timing-row input{
+  width:64px;padding:8px 9px;border-radius:9px;border:1px solid var(--line);
+  background:var(--panel);color:var(--text);font-size:14px;text-align:center;
+  font-variant-numeric:tabular-nums;outline:none;
+}
+.timing-row input:focus{border-color:var(--accent)}
+.timing-row .unit{font-size:12px;color:var(--muted);flex-shrink:0}
+.timing-row.edited input{border-color:var(--accent);color:var(--accent)}
+.timing-row .mmss{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+/* 하단 플레이 바 */
+.playbar{
+  display:flex;align-items:center;gap:13px;
+  padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 8px);
+}
+.beat{width:12px;height:12px;border-radius:50%;background:var(--line);flex-shrink:0}
+.beat.live{background:var(--accent);animation:pulse var(--beat-dur,0.5s) infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.65);opacity:.45}100%{transform:scale(1);opacity:1}}
+.time-lab{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0;min-width:40px}
+.progress{flex:1;height:30px;display:flex;align-items:center;cursor:pointer;position:relative}
+.progress .track{width:100%;height:5px;border-radius:3px;background:var(--panel-2);overflow:hidden}
+.progress .fill{height:100%;width:0%;background:var(--accent);border-radius:3px}
+.turn-tick{position:absolute;top:50%;transform:translate(-50%,-50%);width:2px;height:11px;background:var(--muted);opacity:.55;border-radius:1px}
+.spread-lab{font-size:12px;color:var(--muted);flex-shrink:0;font-variant-numeric:tabular-nums}
+
+/* 설정 팝오버 */
+.pop{
+  position:fixed;top:calc(env(safe-area-inset-top,0px) + 62px);right:12px;z-index:40;
+  background:var(--panel);border:1px solid var(--line);border-radius:15px;
+  padding:18px;width:270px;display:none;box-shadow:0 12px 34px rgba(0,0,0,.5);
+}
+.pop.open{display:block}
+.pop h3{font-size:14px;margin-bottom:13px}
+
+/* 메트로놈 */
+#metroPop{width:288px}
+.metro-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.metro-toggle{
+  padding:8px 18px;border-radius:20px;background:var(--accent);color:#1A1408;
+  font-size:13px;font-weight:700;transition:transform .1s;
+}
+.metro-toggle:active{transform:scale(.95)}
+.metro-toggle.on{background:var(--danger);color:#fff}
+.metro-bpm{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:12px}
+.bpm-step{
+  width:42px;height:42px;border-radius:12px;background:var(--panel-2);
+  font-size:22px;color:var(--text);border:1px solid var(--line);flex-shrink:0;
+}
+.bpm-step:active{background:var(--accent);color:#1A1408}
+.bpm-display{display:flex;flex-direction:column;align-items:center;min-width:96px}
+.bpm-display input{
+  width:96px;border:none;background:transparent;color:var(--accent);
+  font-size:38px;font-weight:800;text-align:center;outline:none;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield;
+}
+.bpm-display input::-webkit-outer-spin-button,
+.bpm-display input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.bpm-display span{font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:-4px}
+.metro-range{width:100%;accent-color:var(--accent);margin-bottom:10px}
+.metro-taprow{display:flex;gap:8px}
+.metro-beats{display:flex;gap:7px;justify-content:center;margin:4px 0 12px;min-height:20px;flex-wrap:wrap}
+.metro-beat{
+  width:16px;height:16px;border-radius:50%;background:var(--line);
+  transition:transform .06s, background .06s;
+}
+.metro-beat.accent{background:var(--muted)}
+.metro-beat.hit{background:var(--accent);transform:scale(1.35)}
+.metro-beat.accent.hit{background:#fff;transform:scale(1.45)}
+.metro-check{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.metro-check input{width:17px;height:17px;accent-color:var(--accent)}
+.toast{
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);
+  transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
+  color:var(--text);padding:11px 18px;border-radius:12px;font-size:13.5px;
+  z-index:99;opacity:0;pointer-events:none;transition:opacity .25s;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ 화면 1 : 악보 보관함 ═══════════ -->
+<div class="screen active" id="library">
+  <div class="lib-head">
+    <div>
+      <div class="brand">Score<em>Flow</em></div>
+      <div class="brand-sub">자동 악보 넘김 · 악보 보관함</div>
+    </div>
+  </div>
+  <div class="lib-body">
+    <div class="song-grid" id="songGrid"></div>
+    <div class="empty" id="emptyState" style="display:none">
+      <div class="big">🎼</div>
+      아직 저장된 악보가 없어요.<br>
+      오른쪽 아래 <b style="color:var(--accent)">＋</b> 버튼으로 첫 악보를 추가해 보세요.
+    </div>
+    <div class="install-hint">
+      📲 <b>앱처럼 설치하기</b> — iPhone/iPad는 Safari <b>공유 → 홈 화면에 추가</b>, Android는 Chrome <b>메뉴(⋮) → 홈 화면에 추가</b>.<br>
+      악보와 필기는 이 기기 안에 저장돼요.
+    </div>
+  </div>
+  <button class="fab" id="addBtn" aria-label="새 악보 추가">＋</button>
+</div>
+
+<!-- ═══════════ 새 악보 모달 ═══════════ -->
+<div class="modal-back" id="addModal">
+  <div class="modal">
+    <h2>새 악보 추가</h2>
+    <div class="sub">곡 길이와 BPM을 입력하면 그 정보에 맞춰 악보가 자동으로 넘어가요.</div>
+    <div class="field">
+      <label>곡 제목</label>
+      <input type="text" id="fTitle" placeholder="예) 한 페이지가 될 수 있게">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>곡 길이 (분)</label>
+        <input type="number" id="fMin" min="0" max="59" inputmode="numeric" placeholder="3">
+      </div>
+      <div class="field">
+        <label>곡 길이 (초)</label>
+        <input type="number" id="fSec" min="0" max="59" inputmode="numeric" placeholder="30">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>BPM (템포)</label>
+        <input type="number" id="fBpm" min="20" max="300" inputmode="numeric" placeholder="120">
+      </div>
+      <div class="field">
+        <label>박자</label>
+        <select id="fSig">
+          <option value="4" selected>4/4</option>
+          <option value="3">3/4</option>
+          <option value="6">6/8</option>
+          <option value="2">2/4</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>악보 파일 (PDF 또는 이미지, 순서대로 선택)</label>
+      <button class="file-pick" id="filePick">파일 선택하기 (PDF / JPG / PNG)</button>
+      <input type="file" id="fFiles" accept="image/*,application/pdf,.pdf" multiple hidden>
+      <div class="hint">우선 곡 길이를 페이지 수로 나눠 자동 계산해요. 페이지마다 마디 수가 다르면, 뷰어의 <b>⏱ 버튼</b>이나 재생 중 <b>"여기서 넘김"</b>으로 페이지별 시점을 정확히 맞출 수 있어요.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelAdd">취소</button>
+      <button class="btn primary" id="saveAdd">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 화면 2 : 악보 뷰어 ═══════════ -->
+<div class="screen" id="viewer">
+  <div class="v-top">
+    <button class="icon-btn" id="backBtn" aria-label="보관함으로">←</button>
+    <button class="icon-btn" id="playBtn" aria-label="재생">▶</button>
+    <div class="v-title">
+      <span id="vTitle">곡 제목</span>
+      <small id="vSub">120 BPM · 4/4</small>
+    </div>
+    <button class="icon-btn" id="metroBtn" aria-label="메트로놈">🎵</button>
+    <button class="icon-btn" id="timingBtn" aria-label="넘김 타이밍 조정">⏱</button>
+    <button class="icon-btn" id="setBtn" aria-label="설정">⚙</button>
+    <button class="icon-btn" id="penBtn" aria-label="필기 모드">✏️</button>
+  </div>
+
+  <div class="pen-bar" id="penBar">
+    <div class="swatches" id="swatches"></div>
+    <div class="pen-sep"></div>
+    <div class="size-wrap">
+      <label>두께</label>
+      <input type="range" id="sizeRange" min="2" max="22" value="4">
+      <div class="size-dot"><i id="sizePreview" style="width:4px;height:4px"></i></div>
+    </div>
+    <div class="pen-sep"></div>
+    <button class="tool-btn" id="eraserBtn">지우개</button>
+    <button class="tool-btn" id="undoBtn">되돌리기</button>
+    <button class="tool-btn" id="clearBtn">전체 지우기</button>
+  </div>
+
+  <div class="spread-wrap" id="spreadWrap">
+    <div class="spread" id="spread"></div>
+    <div class="tap-nav left" id="tapPrev"></div>
+    <div class="tap-nav right" id="tapNext"></div>
+    <div class="focus-hint" id="focusHint">가운데를 탭하면 메뉴가 다시 나타나요</div>
+    <button class="tap-set" id="tapSetBtn">여기서 넘김 ⏱</button>
+  </div>
+
+  <div class="playbar">
+    <div class="beat" id="beatDot"></div>
+    <div class="time-lab" id="curTime">0:00</div>
+    <div class="progress" id="progress">
+      <div class="track"><div class="fill" id="progFill"></div></div>
+      <div id="tickHolder"></div>
+    </div>
+    <div class="time-lab" id="totTime">0:00</div>
+    <div class="spread-lab" id="spreadLab">1–2 / 4</div>
+  </div>
+</div>
+
+<!-- ═══════════ 넘김 타이밍 조정 모달 ═══════════ -->
+<div class="modal-back" id="timingModal">
+  <div class="modal">
+    <h2>넘김 타이밍 조정</h2>
+    <div class="sub">
+      각 페이지로 <b>넘어가는 시각</b>을 직접 맞출 수 있어요. 페이지마다 마디 수가 달라서
+      자동 계산이 안 맞을 때 조정하세요.<br>
+      💡 <b>가장 쉬운 방법</b>: 뷰어에서 곡을 재생하며 넘길 때가 되면 화면 아래 <b>"여기서 넘김"</b> 버튼을 누르면 그 시점이 자동 기록돼요.
+    </div>
+    <div class="timing-list" id="timingList"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="timingReset">자동값으로 초기화</button>
+      <button class="btn primary" id="timingClose">완료</button>
+    </div>
+  </div>
+</div>
+
+<!-- 메트로놈 팝오버 -->
+<div class="pop" id="metroPop">
+  <div class="metro-head">
+    <h3 style="margin:0">메트로놈</h3>
+    <button class="metro-toggle" id="metroToggle">시작</button>
+  </div>
+  <div class="metro-bpm">
+    <button class="bpm-step" id="bpmMinus">−</button>
+    <div class="bpm-display">
+      <input type="number" id="metroBpm" min="20" max="300" value="120">
+      <span>BPM</span>
+    </div>
+    <button class="bpm-step" id="bpmPlus">＋</button>
+  </div>
+  <input type="range" id="metroBpmRange" min="20" max="300" value="120" class="metro-range">
+  <div class="metro-taprow">
+    <button class="tool-btn" id="tapTempo" style="flex:1">탭 템포 (두드려서 설정)</button>
+  </div>
+  <div class="field" style="margin-top:14px;margin-bottom:8px">
+    <label>박자</label>
+    <select id="metroSig">
+      <option value="4">4/4</option><option value="3">3/4</option>
+      <option value="6">6/8</option><option value="2">2/4</option>
+      <option value="1">딸깍만 (강박 없음)</option>
+    </select>
+  </div>
+  <div class="metro-beats" id="metroBeats"></div>
+  <label class="metro-check">
+    <input type="checkbox" id="metroFollowPlay"> 재생 시 자동으로 함께 시작
+  </label>
+</div>
+
+<!-- 재생 설정 팝오버 -->
+<div class="pop" id="setPop">
+  <h3>재생 설정</h3>
+  <div class="field-row">
+    <div class="field"><label>분</label><input type="number" id="sMin" min="0" max="59"></div>
+    <div class="field"><label>초</label><input type="number" id="sSec" min="0" max="59"></div>
+  </div>
+  <div class="field-row">
+    <div class="field"><label>BPM</label><input type="number" id="sBpm" min="20" max="300"></div>
+    <div class="field"><label>박자</label>
+      <select id="sSig">
+        <option value="4">4/4</option><option value="3">3/4</option>
+        <option value="6">6/8</option><option value="2">2/4</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn primary" style="width:100%" id="applySet">적용</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ═══════════════════ 유틸 ═══════════════════ */
+const $ = id => document.getElementById(id);
+const fmt = s => { s=Math.max(0,Math.round(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2400);
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ═══════════════════ 저장소 (IndexedDB + 메모리 폴백) ═══════════════════ */
+const store = {
+  db:null, mem:new Map(), persistent:false,
+  async init(){
+    try{
+      this.db = await new Promise((res,rej)=>{
+        const r = indexedDB.open("scoreflow-db",1);
+        r.onupgradeneeded = e=>{ e.target.result.createObjectStore("songs",{keyPath:"id"}); };
+        r.onsuccess = e=>res(e.target.result);
+        r.onerror  = ()=>rej(r.error);
+        r.onblocked = ()=>rej(new Error("blocked"));
+      });
+      this.persistent = true;
+    }catch(e){ this.persistent = false; }
+  },
+  async all(){
+    if(!this.persistent) return [...this.mem.values()];
+    try{
+      return await new Promise((res,rej)=>{
+        const tx=this.db.transaction("songs","readonly").objectStore("songs").getAll();
+        tx.onsuccess=()=>res(tx.result||[]); tx.onerror=()=>rej(tx.error);
+      });
+    }catch(e){ return [...this.mem.values()]; }
+  },
+  async put(song){
+    this.mem.set(song.id, song);
+    if(!this.persistent) return;
+    try{
+      await new Promise((res,rej)=>{
+        const tx=this.db.transaction("songs","readwrite");
+        tx.objectStore("songs").put(song);
+        tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+      });
+    }catch(e){}
+  },
+  async del(id){
+    this.mem.delete(id);
+    if(!this.persistent) return;
+    try{
+      await new Promise((res,rej)=>{
+        const tx=this.db.transaction("songs","readwrite");
+        tx.objectStore("songs").delete(id);
+        tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+      });
+    }catch(e){}
+  }
+};
+
+/* ═══════════════════ 전역 상태 ═══════════════════ */
+const S = {
+  songs:[], cur:null,
+  rightIdx:0, playing:false, elapsed:0, lastTs:0, raf:null,
+  turnTimes:[], pageAR:1/1.414,
+  pen:false, tool:{ color:"#D93B3B", size:4, eraser:false },
+  undoStack:{}, _lastDrawPage:null,
+  pendingFiles:[], saveTimer:null
+};
+
+/* ═══════════════════ 보관함 ═══════════════════ */
+async function refreshLibrary(){
+  S.songs = await store.all();
+  S.songs.sort((a,b)=>b.created-a.created);
+  const grid=$("songGrid"); grid.innerHTML="";
+  $("emptyState").style.display = S.songs.length ? "none":"block";
+  for(const song of S.songs){
+    const card=document.createElement("button");
+    card.className="song-card";
+    const thumb = song.pages[0] ? `<img src="${song.pages[0]}" alt="">` : `<span class="ph">♪</span>`;
+    card.innerHTML = `
+      <div class="song-thumb">${thumb}
+        <span class="song-del" data-del="${song.id}">✕</span>
+      </div>
+      <div class="song-meta">
+        <div class="song-title">${escapeHtml(song.title)}</div>
+        <div class="song-info"><span class="bpm">♩=${song.bpm}</span><span>${fmt(song.duration)}</span><span>${song.pages.length}p</span></div>
+      </div>`;
+    card.addEventListener("click", e=>{
+      const del = e.target.closest("[data-del]");
+      if(del){
+        e.stopPropagation();
+        if(confirm(`'${song.title}' 악보를 삭제할까요?`)) store.del(song.id).then(refreshLibrary);
+        return;
+      }
+      openSong(song);
+    });
+    grid.appendChild(card);
+  }
+}
+
+/* ── 새 악보 모달 ── */
+$("addBtn").addEventListener("click", ()=>{
+  S.pendingFiles=[];
+  ["fTitle","fMin","fSec","fBpm"].forEach(id=>$(id).value="");
+  $("fSig").value="4";
+  const fp=$("filePick"); fp.textContent="파일 선택하기 (PDF / JPG / PNG)"; fp.classList.remove("has");
+  $("addModal").classList.add("open");
+});
+$("cancelAdd").addEventListener("click", ()=>$("addModal").classList.remove("open"));
+$("filePick").addEventListener("click", ()=>$("fFiles").click());
+$("fFiles").addEventListener("change", e=>{
+  S.pendingFiles=[...e.target.files];
+  const fp=$("filePick");
+  if(S.pendingFiles.length){
+    const hasPdf=S.pendingFiles.some(isPdf);
+    fp.textContent=`선택됨 · ${S.pendingFiles.length}개 파일${hasPdf?" (PDF 포함 — 저장 시 자동 변환)":""}`;
+    fp.classList.add("has");
+  }
+});
+function isPdf(f){ return f.type==="application/pdf" || /\.pdf$/i.test(f.name); }
+
+$("saveAdd").addEventListener("click", async ()=>{
+  const title=$("fTitle").value.trim();
+  const min=+($("fMin").value||0), sec=+($("fSec").value||0);
+  const bpm=+($("fBpm").value||0), sig=+$("fSig").value;
+  const dur=min*60+sec;
+  if(!title) return toast("곡 제목을 입력해 주세요");
+  if(dur<=0)  return toast("곡 길이를 입력해 주세요");
+  if(bpm<20)  return toast("BPM을 입력해 주세요 (20 이상)");
+  if(!S.pendingFiles.length) return toast("악보 파일을 선택해 주세요");
+  $("saveAdd").textContent="변환 중…";
+  let pages;
+  try{
+    pages = await filesToPages(S.pendingFiles, n=>{ $("saveAdd").textContent=`변환 중… ${n}p`; });
+  }catch(err){
+    $("saveAdd").textContent="저장";
+    return toast("파일 변환에 실패했어요. 다른 파일로 시도해 주세요");
+  }
+  if(!pages.length){ $("saveAdd").textContent="저장"; return toast("변환된 페이지가 없어요"); }
+  $("saveAdd").textContent="저장 중…";
+  const song={
+    id:"s"+Date.now()+Math.random().toString(36).slice(2,7),
+    title, bpm, duration:dur, sig, pages, notes:{}, created:Date.now()
+  };
+  await store.put(song);
+  $("saveAdd").textContent="저장";
+  $("addModal").classList.remove("open");
+  if(!store.persistent) toast("이 환경에선 저장이 유지되지 않아요 (미리보기 모드)");
+  refreshLibrary();
+});
+
+/* ── PDF 지원: pdf.js를 필요할 때만 CDN에서 로드 ── */
+let _pdfjsReady=null;
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve();
+  if(_pdfjsReady) return _pdfjsReady;
+  _pdfjsReady = new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload=()=>{
+      try{
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        res();
+      }catch(e){ rej(e); }
+    };
+    s.onerror=()=>rej(new Error("pdfjs-load"));
+    document.head.appendChild(s);
+  });
+  return _pdfjsReady;
+}
+async function pdfToDataURLs(file, onProgress){
+  await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({data:buf}).promise;
+  const out=[];
+  const MAX=1600;
+  for(let p=1;p<=pdf.numPages;p++){
+    const page = await pdf.getPage(p);
+    const v1 = page.getViewport({scale:1});
+    const scale = Math.min(3, MAX/Math.max(v1.width,v1.height));
+    const vp = page.getViewport({scale});
+    const c=document.createElement("canvas");
+    c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+    const ctx=c.getContext("2d");
+    ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,c.width,c.height);
+    await page.render({canvasContext:ctx, viewport:vp}).promise;
+    out.push(c.toDataURL("image/jpeg",0.88));
+    if(onProgress) onProgress(out.length);
+  }
+  return out;
+}
+async function filesToPages(files, onProgress){
+  const pages=[]; let count=0;
+  for(const f of files){
+    if(isPdf(f)){
+      const arr = await pdfToDataURLs(f, ()=>{ count++; if(onProgress) onProgress(count); });
+      pages.push(...arr);
+    }else{
+      pages.push(await fileToDataURL(f));
+      count++; if(onProgress) onProgress(count);
+    }
+  }
+  return pages;
+}
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const MAX=1600;
+      let w=img.naturalWidth, h=img.naturalHeight;
+      const sc=Math.min(1, MAX/Math.max(w,h));
+      w=Math.round(w*sc); h=Math.round(h*sc);
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg",0.88));
+    };
+    img.onerror=rej;
+    img.src=url;
+  });
+}
+
+/* ═══════════════════ 넘김 타이밍 ═══════════════════
+   모델: 현재 연주 페이지 = 오른쪽 슬롯(rightIdx). 넘기면 그 페이지가
+   왼쪽으로 밀리고 다음 페이지가 오른쪽에 등장(한 번에 한 페이지).
+   turnTimes[k] = 페이지 (k+1)이 오른쪽 현재 페이지가 되는 시각(초).
+   길이 = N-1. 첫 페이지(0)는 0초부터 오른쪽.
+
+   기본값은 곡 길이를 페이지에 균등 분배. song.customTurns[k]에
+   사용자가 지정한 값이 있으면 그걸 우선(페이지별 미세조정). */
+function baseTurnTimes(song){
+  const N=song.pages.length;
+  const times=[];
+  const pageDur=song.duration/N;
+  for(let k=1;k<=N-1;k++) times.push(+(k*pageDur).toFixed(2));
+  return times;
+}
+function computeTurnTimes(song){
+  const base=baseTurnTimes(song);
+  const custom=song.customTurns||{};
+  const times=base.map((t,k)=> (custom[k]!=null? +custom[k] : t));
+  for(let k=0;k<times.length;k++){
+    times[k]=Math.max(0.1, Math.min(times[k], song.duration-0.1));
+    if(k>0 && times[k]<=times[k-1]) times[k]=Math.min(times[k-1]+0.3, song.duration-0.1);
+  }
+  return times;
+}
+
+/* ═══════════════════ 뷰어 ═══════════════════ */
+function openSong(song){
+  if(!song.customTurns) song.customTurns={};
+  S.cur=song; S.rightIdx=0; S.elapsed=0; S.playing=false;
+  S.undoStack={}; S._lastDrawPage=null;
+  S.turnTimes=computeTurnTimes(song);
+  S.pageAR = 1/1.414;
+  setFocusMode(false);
+  // 첫 페이지 실제 비율 읽어서 레이아웃 정확도 향상
+  if(song.pages[0]){
+    const im=new Image();
+    im.onload=()=>{
+      const ar=im.naturalWidth/im.naturalHeight;
+      if(S.cur===song && ar>0){ S.pageAR=ar; layoutSpread(); }
+    };
+    im.src=song.pages[0];
+  }
+  $("vTitle").textContent=song.title;
+  updateSub();
+  $("totTime").textContent=fmt(song.duration);
+  $("playBtn").textContent="▶"; $("playBtn").classList.remove("on");
+  $("beatDot").classList.remove("live");
+  document.documentElement.style.setProperty("--beat-dur",(60/song.bpm)+"s");
+  setPen(false);
+  renderTicks();
+  renderSpread(false);
+  updatePlaybar();
+  switchScreen("viewer");
+}
+function updateSub(){
+  const sigLabel={4:"4/4",3:"3/4",6:"6/8",2:"2/4"}[S.cur.sig]||S.cur.sig;
+  $("vSub").textContent=`♩=${S.cur.bpm} · ${sigLabel} · ${fmt(S.cur.duration)}`;
+}
+function switchScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+}
+$("backBtn").addEventListener("click", async ()=>{
+  stopPlay();
+  METRO.stop();
+  await flushNotes();
+  await flushSaveSong();
+  $("setPop").classList.remove("open");
+  $("metroPop").classList.remove("open");
+  $("timingModal").classList.remove("open");
+  setFocusMode(false);
+  switchScreen("library");
+  refreshLibrary();
+});
+
+/* 집중 모드 on/off */
+function setFocusMode(on){
+  document.body.classList.toggle("focus-mode", on);
+  if(on){
+    const h=$("focusHint");
+    if(h){ h.classList.add("show"); clearTimeout(h._t); h._t=setTimeout(()=>h.classList.remove("show"),1800); }
+  }
+}
+
+/* ── 2페이지 스프레드 ──
+   왼쪽 = 방금 지난 페이지(rightIdx-1), 오른쪽 = 현재 연주 페이지(rightIdx).
+   한 번에 한 페이지씩 넘어가며, 오른쪽이 항상 '지금' 페이지. */
+function renderSpread(animate){
+  const sp=$("spread"); sp.innerHTML="";
+  const N=S.cur.pages.length;
+  S.rightIdx=Math.min(Math.max(0,S.rightIdx),N-1);
+  const idxs=[S.rightIdx-1, S.rightIdx];  // [왼쪽, 오른쪽]
+  const loads=[];
+  idxs.forEach((idx,slot)=>{
+    const div=document.createElement("div");
+    div.className="page-slot";
+    if(idx<0 || idx>=N){ div.classList.add("blank"); sp.appendChild(div); return; }
+    if(slot===1) div.classList.add("current");   // 오른쪽 = 현재 페이지 강조
+    const img=document.createElement("img");
+    img.className="sheet"; img.src=S.cur.pages[idx]; img.alt="page "+(idx+1);
+    loads.push(new Promise(res=>{
+      if(img.complete&&img.naturalWidth) return res();
+      img.onload=()=>res(); img.onerror=()=>res();
+    }));
+    const cv=document.createElement("canvas");
+    cv.dataset.page=idx;
+    const num=document.createElement("div");
+    num.className="page-num"; num.textContent=idx+1;
+    div.append(img,cv,num);
+    if(animate){
+      if(slot===0) div.classList.add("anim-shift");  // 이전 페이지가 왼쪽으로 밀려옴
+      else div.classList.add("anim-in");             // 현재 페이지가 오른쪽에서 등장
+    }
+    sp.appendChild(div);
+    setupCanvas(cv, idx);
+  });
+  layoutSpread();
+  Promise.all(loads).then(layoutSpread);
+  updatePlaybar();
+}
+
+/* 악보를 빈 공간 없이 최대 크기로: 이미지 실제 비율에 맞춰 슬롯 크기 계산 */
+function layoutSpread(){
+  const wrap=$("spreadWrap");
+  const slots=[...document.querySelectorAll("#spread .page-slot")];
+  if(!wrap||!slots.length) return;
+  const GAP=4;
+  const W=wrap.clientWidth-6, H=wrap.clientHeight-4;
+  if(W<=0||H<=0) return;
+  const arOf=sl=>{
+    const im=sl.querySelector("img.sheet");
+    return (im&&im.naturalWidth&&im.naturalHeight)? im.naturalWidth/im.naturalHeight : S.pageAR;
+  };
+  const a0=arOf(slots[0]);
+  const hasSecond = slots.length>1 && !slots[1].classList.contains("blank");
+  const a1= hasSecond ? arOf(slots[1]) : null;
+  const totalAR=a0+(a1||0);
+  let h=H;
+  const need=h*totalAR+(a1?GAP:0);
+  if(need>W) h=(W-(a1?GAP:0))/totalAR;
+  slots.forEach((sl,i)=>{
+    if(sl.classList.contains("blank")){ sl.style.height=Math.floor(h)+"px"; sl.style.width=Math.floor(h*S.pageAR)+"px"; return; }
+    const a=(i===0)?a0:a1;
+    sl.style.height=Math.floor(h)+"px";
+    sl.style.width=Math.floor(h*a)+"px";
+  });
+  document.querySelectorAll("#spread canvas").forEach(cv=>{ if(cv._fit) cv._fit(); });
+}
+
+/* elapsed → 현재 오른쪽 페이지(rightIdx) 반영.
+   turnTimes[k]를 지나면 페이지 k+1이 현재 페이지가 됨. */
+function applyElapsed(){
+  let n=0;
+  while(n<S.turnTimes.length && S.turnTimes[n]<=S.elapsed) n++;  // n = 현재 rightIdx
+  if(n!==S.rightIdx){
+    flushNotes();
+    const fwdOne=(n===S.rightIdx+1);
+    S.rightIdx=n;
+    renderSpread(fwdOne);
+  }
+  updatePlaybar();
+}
+
+/* ── 페이지 넘김 ── */
+$("tapPrev").addEventListener("click", ()=>manualNav(-1));
+$("tapNext").addEventListener("click", ()=>manualNav(1));
+/* 악보 가운데 탭 → 집중 모드 토글 */
+$("spreadWrap").addEventListener("click", e=>{
+  if(S.pen) return;
+  if(e.target.closest(".tap-nav")) return;
+  setFocusMode(!document.body.classList.contains("focus-mode"));
+  requestAnimationFrame(layoutSpread);
+});
+function manualNav(d){
+  const N=S.cur.pages.length;
+  const next=Math.min(Math.max(0,S.rightIdx+d),N-1);
+  if(next===S.rightIdx) return;
+  S.elapsed = next===0 ? 0 : S.turnTimes[next-1];
+  S.lastTs=performance.now();
+  flushNotes();
+  S.rightIdx=next;
+  renderSpread(Math.abs(next-S.rightIdx)===0);
+}
+document.addEventListener("keydown", e=>{
+  if(!$("viewer").classList.contains("active")) return;
+  if(e.key==="ArrowRight") manualNav(1);
+  if(e.key==="ArrowLeft")  manualNav(-1);
+  if(e.key===" "){ e.preventDefault(); togglePlay(); }
+});
+
+/* ── 재생 (곡 길이·BPM 기반 자동 넘김) ── */
+$("playBtn").addEventListener("click", togglePlay);
+function togglePlay(){ if(S.playing) stopPlay(); else startPlay(); }
+function startPlay(){
+  if(S.elapsed>=S.cur.duration){ S.elapsed=0; S.rightIdx=0; renderSpread(false); }
+  S.playing=true; S.lastTs=performance.now();
+  $("playBtn").textContent="⏸"; $("playBtn").classList.add("on");
+  $("beatDot").classList.add("live");
+  document.body.classList.add("recording-turns");  // '여기서 넘김' 버튼 표시
+  if(METRO.followPlay && !METRO.on){ METRO.setBpm(S.cur.bpm); METRO.setBeats(S.cur.sig); METRO.start(); }
+  ensureRaf();
+}
+function stopPlay(){
+  S.playing=false;
+  if(S.raf){ cancelAnimationFrame(S.raf); S.raf=null; }
+  $("playBtn").textContent="▶"; $("playBtn").classList.remove("on");
+  $("beatDot").classList.remove("live");
+  document.body.classList.remove("recording-turns");
+  if(METRO.followPlay && METRO.on) METRO.stop();
+}
+function ensureRaf(){
+  if(S.raf) return;
+  const loop=ts=>{
+    S.raf=null;
+    if(!$("viewer").classList.contains("active")||!S.playing) return;
+    S.elapsed += (ts-S.lastTs)/1000;
+    S.lastTs = ts;
+    if(S.elapsed>=S.cur.duration){
+      S.elapsed=S.cur.duration;
+      stopPlay();
+      toast("연주 끝 🎉");
+    }
+    applyElapsed();
+    if(S.playing) S.raf=requestAnimationFrame(loop);
+  };
+  S.raf=requestAnimationFrame(loop);
+}
+
+/* ── 플레이 바 ── */
+function updatePlaybar(){
+  const d=S.cur?S.cur.duration:1;
+  $("curTime").textContent=fmt(S.elapsed);
+  $("progFill").style.width=(Math.min(1,S.elapsed/d)*100)+"%";
+  const N=S.cur?S.cur.pages.length:0;
+  // 현재(오른쪽) 페이지 번호 강조
+  $("spreadLab").textContent=N?`${S.rightIdx+1} / ${N}p`:"";
+}
+function renderTicks(){
+  const holder=$("tickHolder"); holder.innerHTML="";
+  for(const t of S.turnTimes){
+    const el=document.createElement("div");
+    el.className="turn-tick";
+    el.style.left=(t/S.cur.duration*100)+"%";
+    holder.appendChild(el);
+  }
+}
+$("progress").addEventListener("pointerdown", e=>{
+  const rect=$("progress").getBoundingClientRect();
+  const frac=Math.min(1,Math.max(0,(e.clientX-rect.left)/rect.width));
+  S.elapsed=frac*S.cur.duration;
+  S.lastTs=performance.now();
+  applyElapsed();
+});
+
+/* ── 재생 설정 팝오버 ── */
+$("setBtn").addEventListener("click", ()=>{
+  const p=$("setPop");
+  if(p.classList.contains("open")){ p.classList.remove("open"); return; }
+  closeOtherPops("setPop");
+  $("sMin").value=Math.floor(S.cur.duration/60);
+  $("sSec").value=S.cur.duration%60;
+  $("sBpm").value=S.cur.bpm;
+  $("sSig").value=S.cur.sig;
+  p.classList.add("open");
+});
+$("applySet").addEventListener("click", async ()=>{
+  const dur=(+($("sMin").value||0))*60+(+($("sSec").value||0));
+  const bpm=+($("sBpm").value||0);
+  if(dur<=0||bpm<20) return toast("길이와 BPM을 확인해 주세요");
+  S.cur.duration=dur; S.cur.bpm=bpm; S.cur.sig=+$("sSig").value;
+  S.turnTimes=computeTurnTimes(S.cur);
+  document.documentElement.style.setProperty("--beat-dur",(60/bpm)+"s");
+  updateSub(); renderTicks(); applyElapsed();
+  $("totTime").textContent=fmt(dur);
+  await store.put(S.cur);
+  $("setPop").classList.remove("open");
+  toast("적용됐어요");
+});
+
+/* ═══════════════════ 넘김 타이밍 조정 ═══════════════════ */
+/* '여기서 넘김' 버튼: 재생 중 지금 시각을 '다음 페이지로 넘어가는 시점'으로 기록.
+   현재 오른쪽 페이지가 rightIdx면, rightIdx→rightIdx+1 전환 시각 = turnTimes[rightIdx] 를 지금으로 설정. */
+$("tapSetBtn").addEventListener("click", (e)=>{
+  e.stopPropagation();
+  const N=S.cur.pages.length;
+  const k=S.rightIdx;                 // turnTimes[k] = 페이지 k+1로 넘어가는 시각
+  if(k>=N-1){ toast("마지막 페이지예요"); return; }
+  S.cur.customTurns[k]=+S.elapsed.toFixed(2);
+  S.turnTimes=computeTurnTimes(S.cur);
+  renderTicks();
+  scheduleSaveSong();
+  // 즉시 다음 페이지로 넘겨서 계속 기록할 수 있게
+  S.rightIdx=k+1;
+  renderSpread(true);
+  updatePlaybar();
+  toast(`${k+1}p → ${k+2}p 넘김: ${fmt(S.elapsed)} 기록`);
+});
+
+/* 타이밍 편집 모달 */
+$("timingBtn").addEventListener("click", openTimingModal);
+function openTimingModal(){
+  const N=S.cur.pages.length;
+  const list=$("timingList"); list.innerHTML="";
+  if(N<2){ list.innerHTML=`<div class="sub">페이지가 1장이라 넘김이 없어요.</div>`; }
+  const times=computeTurnTimes(S.cur);
+  for(let k=0;k<N-1;k++){
+    const row=document.createElement("div");
+    row.className="timing-row"+(S.cur.customTurns[k]!=null?" edited":"");
+    const secs=times[k];
+    row.innerHTML=`
+      <span class="pg"><b>${k+1}p</b> <span class="arrow">→</span> <b>${k+2}p</b></span>
+      <input type="number" step="0.5" min="0" data-k="${k}" value="${secs.toFixed(1)}">
+      <span class="unit">초</span>
+      <span class="mmss">${fmt(secs)}</span>`;
+    const inp=row.querySelector("input");
+    inp.addEventListener("change", ()=>{
+      const v=parseFloat(inp.value);
+      if(isNaN(v)){ return; }
+      S.cur.customTurns[k]=+v.toFixed(2);
+      S.turnTimes=computeTurnTimes(S.cur);
+      row.classList.add("edited");
+      row.querySelector(".mmss").textContent=fmt(v);
+      renderTicks(); applyElapsed(); scheduleSaveSong();
+    });
+    list.appendChild(row);
+  }
+  $("timingModal").classList.add("open");
+}
+$("timingClose").addEventListener("click", ()=>{
+  $("timingModal").classList.remove("open");
+  flushSaveSong();
+});
+$("timingReset").addEventListener("click", ()=>{
+  if(!confirm("이 곡의 넘김 시점을 자동 계산값으로 되돌릴까요?")) return;
+  S.cur.customTurns={};
+  S.turnTimes=computeTurnTimes(S.cur);
+  renderTicks(); applyElapsed(); scheduleSaveSong();
+  openTimingModal();
+  toast("자동값으로 초기화했어요");
+});
+
+/* 곡 메타(customTurns 등) 저장 디바운스 */
+function scheduleSaveSong(){
+  clearTimeout(S._songSaveTimer);
+  S._songSaveTimer=setTimeout(()=>store.put(S.cur),600);
+}
+async function flushSaveSong(){
+  clearTimeout(S._songSaveTimer);
+  if(S.cur) await store.put(S.cur);
+}
+
+/* ═══════════════════ 메트로놈 ═══════════════════
+   Web Audio로 정확한 타이밍의 클릭음 생성. 강박(첫 박)은 높은 음,
+   약박은 낮은 음. BPM·박자를 직접 조절하고 탭 템포도 지원. */
+const METRO = {
+  ctx:null, on:false, bpm:120, beats:4, beatInPattern:0,
+  nextNoteTime:0, timer:null, lookahead:0.10, scheduleAhead:0.20,
+  followPlay:false,
+  ensureCtx(){
+    if(!this.ctx){
+      const AC=window.AudioContext||window.webkitAudioContext;
+      this.ctx=new AC();
+    }
+    if(this.ctx.state==="suspended") this.ctx.resume();
+    return this.ctx;
+  },
+  click(time, accent){
+    const ctx=this.ctx;
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.frequency.value = accent ? 1500 : 800;
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(accent?0.6:0.4, time+0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time+0.05);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(time); osc.stop(time+0.06);
+    // 시각 표시 예약
+    const idx=this.beatInPattern, delay=(time-ctx.currentTime)*1000;
+    setTimeout(()=>flashBeat(idx), Math.max(0,delay));
+  },
+  scheduler(){
+    while(this.nextNoteTime < this.ctx.currentTime + this.scheduleAhead){
+      const accent = (this.beats>1 && this.beatInPattern===0);
+      this.click(this.nextNoteTime, accent);
+      this.nextNoteTime += 60/this.bpm;
+      this.beatInPattern = (this.beatInPattern+1) % Math.max(1,this.beats);
+    }
+  },
+  start(){
+    if(this.on) return;
+    this.ensureCtx();
+    this.on=true;
+    this.beatInPattern=0;
+    this.nextNoteTime=this.ctx.currentTime+0.06;
+    this.timer=setInterval(()=>this.scheduler(), this.lookahead*1000);
+    reflectMetroUI();
+  },
+  stop(){
+    this.on=false;
+    if(this.timer){ clearInterval(this.timer); this.timer=null; }
+    clearBeatFlash();
+    reflectMetroUI();
+  },
+  toggle(){ this.on?this.stop():this.start(); },
+  setBpm(v){
+    v=Math.max(20,Math.min(300,Math.round(v||0)));
+    this.bpm=v;
+    $("metroBpm").value=v; $("metroBpmRange").value=v;
+  },
+  setBeats(v){ this.beats=Math.max(1,v|0); renderMetroBeats(); }
+};
+
+function renderMetroBeats(){
+  const wrap=$("metroBeats"); wrap.innerHTML="";
+  if(METRO.beats<=1){ return; }
+  for(let i=0;i<METRO.beats;i++){
+    const d=document.createElement("div");
+    d.className="metro-beat"+(i===0?" accent":"");
+    d.dataset.i=i;
+    wrap.appendChild(d);
+  }
+}
+function flashBeat(idx){
+  if(!$("metroPop").classList.contains("open")) return;
+  const dots=$("metroBeats").children;
+  for(const d of dots) d.classList.remove("hit");
+  if(dots[idx]) dots[idx].classList.add("hit");
+  // 상단 메트로놈 버튼도 살짝 반응
+  $("metroBtn").classList.add("on");
+}
+function clearBeatFlash(){
+  for(const d of $("metroBeats").children) d.classList.remove("hit");
+}
+function reflectMetroUI(){
+  const t=$("metroToggle");
+  t.textContent = METRO.on ? "정지" : "시작";
+  t.classList.toggle("on", METRO.on);
+  $("metroBtn").classList.toggle("on", METRO.on);
+}
+
+/* 팝오버 열기: 현재 곡의 BPM·박자를 기본값으로 */
+$("metroBtn").addEventListener("click", ()=>{
+  const p=$("metroPop");
+  if(p.classList.contains("open")){ p.classList.remove("open"); return; }
+  closeOtherPops("metroPop");
+  METRO.setBpm(METRO.on ? METRO.bpm : (S.cur?S.cur.bpm:120));
+  const sig = S.cur ? S.cur.sig : 4;
+  $("metroSig").value = String(sig);
+  METRO.setBeats(sig);
+  $("metroFollowPlay").checked = METRO.followPlay;
+  reflectMetroUI();
+  p.classList.add("open");
+});
+$("metroToggle").addEventListener("click", ()=>METRO.toggle());
+$("metroBpm").addEventListener("input", e=>METRO.setBpm(+e.target.value));
+$("metroBpm").addEventListener("change", e=>METRO.setBpm(+e.target.value));
+$("metroBpmRange").addEventListener("input", e=>METRO.setBpm(+e.target.value));
+$("bpmMinus").addEventListener("click", ()=>METRO.setBpm(METRO.bpm-1));
+$("bpmPlus").addEventListener("click", ()=>METRO.setBpm(METRO.bpm+1));
+$("metroSig").addEventListener("change", e=>METRO.setBeats(+e.target.value));
+$("metroFollowPlay").addEventListener("change", e=>{ METRO.followPlay=e.target.checked; });
+
+/* 탭 템포: 버튼을 리듬에 맞춰 두드리면 BPM 계산 */
+let _taps=[];
+$("tapTempo").addEventListener("click", ()=>{
+  const now=performance.now();
+  _taps=_taps.filter(t=>now-t<3000);   // 3초 넘은 탭은 버림
+  _taps.push(now);
+  if(_taps.length>=2){
+    const intervals=[];
+    for(let i=1;i<_taps.length;i++) intervals.push(_taps[i]-_taps[i-1]);
+    const avg=intervals.reduce((a,b)=>a+b,0)/intervals.length;
+    const bpm=Math.round(60000/avg);
+    if(bpm>=20&&bpm<=300) METRO.setBpm(bpm);
+  }
+  $("tapTempo").textContent=`탭 템포 (${_taps.length})`;
+  clearTimeout(_taps._reset);
+  _taps._reset=setTimeout(()=>{ _taps=[]; $("tapTempo").textContent="탭 템포 (두드려서 설정)"; },2200);
+});
+
+/* 여러 팝오버가 동시에 열리지 않도록 */
+function closeOtherPops(keep){
+  ["setPop","metroPop"].forEach(id=>{ if(id!==keep) $(id).classList.remove("open"); });
+}
+
+/* ═══════════════════ 필기 ═══════════════════ */
+const COLORS=["#D93B3B","#2E6FD8","#2E9E5B","#E5A33B","#1B1B1B"];
+const swWrap=$("swatches");
+COLORS.forEach((c,i)=>{
+  const b=document.createElement("button");
+  b.className="swatch"+(i===0?" sel":"");
+  b.style.background=c;
+  b.addEventListener("click", ()=>{
+    S.tool.color=c; S.tool.eraser=false;
+    $("eraserBtn").classList.remove("sel");
+    swWrap.querySelectorAll(".swatch").forEach(s=>s.classList.remove("sel"));
+    b.classList.add("sel");
+    updateSizePreview();
+  });
+  swWrap.appendChild(b);
+});
+$("sizeRange").addEventListener("input", e=>{ S.tool.size=+e.target.value; updateSizePreview(); });
+function updateSizePreview(){
+  const p=$("sizePreview");
+  const s=Math.min(22,S.tool.size);
+  p.style.width=s+"px"; p.style.height=s+"px";
+  p.style.background=S.tool.eraser?"#888":S.tool.color;
+}
+$("eraserBtn").addEventListener("click", ()=>{
+  S.tool.eraser=!S.tool.eraser;
+  $("eraserBtn").classList.toggle("sel",S.tool.eraser);
+  swWrap.querySelectorAll(".swatch").forEach(s=>s.classList.remove("sel"));
+  if(!S.tool.eraser){
+    const idx=COLORS.indexOf(S.tool.color);
+    if(idx>=0) swWrap.children[idx].classList.add("sel");
+  }
+  updateSizePreview();
+});
+$("undoBtn").addEventListener("click", ()=>{
+  const idx=S._lastDrawPage;
+  if(idx==null || !(S.undoStack[idx]&&S.undoStack[idx].length)) return toast("되돌릴 필기가 없어요");
+  const prev=S.undoStack[idx].pop();
+  const cv=document.querySelector(`canvas[data-page="${idx}"]`);
+  if(!cv) return;
+  const ctx=cv.getContext("2d");
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(prev){
+    const im=new Image();
+    im.onload=()=>{ ctx.drawImage(im,0,0,cv.width,cv.height); persistNote(idx,cv); };
+    im.src=prev;
+  }else{
+    delete S.cur.notes[idx]; cv._touched=false; scheduleSave();
+  }
+});
+$("clearBtn").addEventListener("click", ()=>{
+  if(!confirm("보이는 두 페이지의 필기를 모두 지울까요?")) return;
+  document.querySelectorAll("#spread canvas").forEach(cv=>{
+    const idx=+cv.dataset.page;
+    pushUndo(idx,cv);
+    cv.getContext("2d").clearRect(0,0,cv.width,cv.height);
+    delete S.cur.notes[idx]; cv._touched=false;
+  });
+  scheduleSave();
+});
+$("penBtn").addEventListener("click", ()=>setPen(!S.pen));
+function setPen(on){
+  S.pen=on;
+  $("penBtn").classList.toggle("on",on);
+  $("penBar").classList.toggle("open",on);
+  document.body.classList.toggle("pen-mode",on);
+  requestAnimationFrame(layoutSpread);
+  updateSizePreview();
+}
+function setupCanvas(cv, pageIdx){
+  const fit=()=>{
+    const rect=cv.parentElement.getBoundingClientRect();
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const nw=Math.max(1,Math.round(rect.width*dpr));
+    const nh=Math.max(1,Math.round(rect.height*dpr));
+    if(cv.width===nw && cv.height===nh && cv._drawn) return;
+    cv.width=nw; cv.height=nh;
+    const saved=S.cur.notes[pageIdx];
+    if(saved){
+      const im=new Image();
+      im.onload=()=>{ cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height); cv._drawn=true; };
+      im.src=saved;
+    }else{ cv._drawn=true; }
+  };
+  cv._fit=fit;
+
+  let drawing=false, last=null;
+  const pos=e=>{
+    const r=cv.getBoundingClientRect();
+    return { x:(e.clientX-r.left)*cv.width/r.width,
+             y:(e.clientY-r.top)*cv.height/r.height };
+  };
+  cv.addEventListener("pointerdown", e=>{
+    if(!S.pen) return;
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    drawing=true; last=pos(e);
+    pushUndo(pageIdx,cv);
+    S._lastDrawPage=pageIdx;
+    drawSeg(cv,last,last);
+  });
+  cv.addEventListener("pointermove", e=>{
+    if(!S.pen||!drawing) return;
+    e.preventDefault();
+    const p=pos(e);
+    drawSeg(cv,last,p);
+    last=p;
+  });
+  const end=()=>{ if(!drawing) return; drawing=false; persistNote(pageIdx,cv); };
+  cv.addEventListener("pointerup",end);
+  cv.addEventListener("pointercancel",end);
+  cv.addEventListener("pointerleave",end);
+}
+function drawSeg(cv,a,b){
+  const ctx=cv.getContext("2d");
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  ctx.lineWidth=S.tool.size*dpr*(S.tool.eraser?2.4:1);
+  if(S.tool.eraser){
+    ctx.globalCompositeOperation="destination-out";
+    ctx.strokeStyle="rgba(0,0,0,1)";
+  }else{
+    ctx.globalCompositeOperation="source-over";
+    ctx.strokeStyle=S.tool.color;
+  }
+  ctx.beginPath();
+  ctx.moveTo(a.x,a.y);
+  ctx.lineTo(b.x===a.x&&b.y===a.y ? b.x+0.01 : b.x, b.y);
+  ctx.stroke();
+}
+function pushUndo(idx,cv){
+  if(!S.undoStack[idx]) S.undoStack[idx]=[];
+  const st=S.undoStack[idx];
+  st.push((S.cur.notes[idx]||cv._touched)?cv.toDataURL("image/png"):null);
+  if(st.length>12) st.shift();
+}
+function persistNote(idx,cv){
+  cv._touched=true; cv._drawn=true;
+  S.cur.notes[idx]=cv.toDataURL("image/png");
+  scheduleSave();
+}
+function scheduleSave(){
+  clearTimeout(S.saveTimer);
+  S.saveTimer=setTimeout(()=>store.put(S.cur),700);
+}
+async function flushNotes(){
+  clearTimeout(S.saveTimer);
+  if(S.cur) await store.put(S.cur);
+}
+
+/* 화면 회전/리사이즈 */
+let rsz;
+window.addEventListener("resize", ()=>{
+  if(!$("viewer").classList.contains("active")) return;
+  clearTimeout(rsz);
+  rsz=setTimeout(()=>{ flushNotes().then(()=>renderSpread(false)); },250);
+});
+
+/* ═══════════════════ 시작 ═══════════════════ */
+(async function init(){
+  await store.init();
+  await refreshLibrary();
+  if(!store.persistent){
+    setTimeout(()=>toast("미리보기 모드 — 파일을 다운로드해 브라우저로 열면 저장이 유지돼요"),600);
+  }
+})();
+</script>
+</body>
+</html>
